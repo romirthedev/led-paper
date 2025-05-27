@@ -14,9 +14,10 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 unused import
 from matplotlib import cm
 from matplotlib import rc
-rc('text', usetex=True)
+rc('text', usetex=False)
 
-plt.rcParams["text.usetex"] = True
+matplotlib.rcParams['text.usetex'] = False
+plt.rcParams["text.usetex"] = False
 plt.rcParams['xtick.major.pad']='10'
 plt.rcParams['ytick.major.pad']='10'
 font = {'weight':'normal', 'size':16}
@@ -108,7 +109,7 @@ for ic in range(len(rho_act_all)):
 
 
     fig = plt.figure(figsize=(12,10))
-    ax = fig.gca(projection='3d')
+    ax = fig.add_subplot(111, projection='3d')
     print(np.shape(X))
     print(np.shape(Y))
     print(np.shape(Z))
@@ -169,7 +170,7 @@ for ic in range(len(rho_in_all)):
 
 
     fig = plt.figure(figsize=(12,10))
-    ax = fig.gca(projection='3d')
+    ax = fig.add_subplot(111, projection='3d')
     print(np.shape(X))
     print(np.shape(Y))
     print(np.shape(Z))

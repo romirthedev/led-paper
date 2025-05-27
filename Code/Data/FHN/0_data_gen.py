@@ -26,13 +26,13 @@ energ_in_all = []
 
 for file_name in file_names:
     file_name_act = "./InitialConditions/" + file_name + "u.txt"
-    rho_act_0 = loadtxt(file_name_act, delimiter="\n")
+    rho_act_0 = loadtxt(file_name_act, delimiter=",")
 
     file_name_in = "./InitialConditions/" + file_name + "v.txt"
-    rho_in_0 = loadtxt(file_name_in, delimiter="\n")
+    rho_in_0 = loadtxt(file_name_in, delimiter=",")
 
     file_name_x = "./InitialConditions/y0x.txt"
-    x = loadtxt(file_name_x, delimiter="\n")
+    x = loadtxt(file_name_x, delimiter=",")
     # print(x)
     # print(np.shape(x))
     # print(np.shape(rho_act_0))
