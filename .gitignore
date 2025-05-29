@@ -18,7 +18,7 @@ __pycache__/
 *.npz
 *.p
 
-Data/
+# Data/
 Results/
 Code/Utilities
 Logs/
@@ -28,7 +28,7 @@ Code/PostProcessing/*/*/Figures
 Code/PostProcessing/*/*/Postprocessing_Logs*
 
 # Code/PostProcessing/
-Data/*
+# Data/*
 Results/*
 Code/Utilities/*
 Doc/*
