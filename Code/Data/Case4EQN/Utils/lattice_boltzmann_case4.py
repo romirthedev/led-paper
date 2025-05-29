@@ -5,7 +5,7 @@
 """
 import numpy as np
 
-def LBM_CASE4(f_minus_1, f_0, f_plus_1, advection_velocity, reaction_term, omega, dt):
+def LBM_CASE4(f_minus_1, f_0, f_plus_1, advection_velocity, reaction_term, omega, dt, da):
     #############################
     # Collision terms (omega)
     #############################
@@ -27,25 +27,17 @@ def LBM_CASE4(f_minus_1, f_0, f_plus_1, advection_velocity, reaction_term, omega
     f_0_eq = w[1] * rho_t * (1 + advection_velocity * ci[1] / cs_sq)
     f_plus_1_eq = w[2] * rho_t * (1 + advection_velocity * ci[2] / cs_sq)
 
-    # Collision step (BGK) with reaction term
-    # The reaction term is -af. Adding it as S_i = w_i * S where S = -af.
-
-    reaction_term_value = reaction_term * rho_t
-    reaction_minus_1 = w[0] * reaction_term_value
-    reaction_0 = w[1] * reaction_term_value
-    reaction_plus_1 = w[2] * reaction_term_value
-
-    # fi_coll = fi - omega * (fi - fi_eq)
-    # fi_new = fi_coll + dt * Reaction_i
-
+    # Collision step (BGK)
     f_minus_1_col = f_minus_1 - omega * (f_minus_1 - f_minus_1_eq)
     f_0_col = f_0 - omega * (f_0 - f_0_eq)
     f_plus_1_col = f_plus_1 - omega * (f_plus_1 - f_plus_1_eq)
 
-    # Add reaction term after collision
-    f_minus_1_reacted = f_minus_1_col + dt * reaction_minus_1
-    f_0_reacted = f_0_col + dt * reaction_0
-    f_plus_1_reacted = f_plus_1_col + dt * reaction_plus_1
+    # Add reaction term after collision (Source term S = -af)
+    S = reaction_term * rho_t
+    # Distribute source term based on weights (simplest approach)
+    f_minus_1_reacted = f_minus_1_col + dt * w[0] * S
+    f_0_reacted = f_0_col + dt * w[1] * S
+    f_plus_1_reacted = f_plus_1_col + dt * w[2] * S
 
 
     #############################
@@ -63,33 +55,30 @@ def LBM_CASE4(f_minus_1, f_0, f_plus_1, advection_velocity, reaction_term, omega
 
     f_0_stream = f_0_reacted # Particles with zero velocity stay
 
-    # Apply Boundary Condition at a=0 (left boundary, index 0): f(t, a=0) = 0
-    # This is a Dirichlet BC on the macroscopic density. We need to set the incoming population (f_plus_1_stream[0]).
-    # The outgoing population f_minus_1_reacted[0] streams to the left and is lost.
-    # The particle f_0_reacted[0] stays at the boundary.
-    # Macroscopic density at boundary: rho_t[0] = f_minus_1_stream[0] + f_0_stream[0] + f_plus_1_stream[0]
-    # Here f_minus_1_stream[0] is the value from f_minus_1_reacted[1] after streaming.
-    # We want rho_t[0] = 0.
-    # f_plus_1_stream[0] = 0 - f_minus_1_stream[0] - f_0_stream[0]
+    # Apply Boundary Condition at a=0 (left boundary, index 0): f(t, a=0) = 0 (Dirichlet)
+    # Use non-equilibrium extrapolation method for incoming population f_plus_1_stream[0]
+    # f_plus_1_stream[0] = f_plus_1_eq[0] + (f_plus_1_reacted[0] - f_plus_1_eq[0]) # This is simple extrapolation, not for Dirichlet
+    # For f(t, 0) = 0, and advection_velocity > 0 (meaning f_plus_1 streams *into* the domain at a=0)
+    # The density at the boundary rho_t[0] should be 0.
+    # rho_t[0] = f_minus_1_stream[0] + f_0_stream[0] + f_plus_1_stream[0] = 0
+    # f_minus_1_stream[0] is known from f_minus_1_reacted[1] after streaming.
+    # f_0_stream[0] is known from f_0_reacted[0] (stays at boundary).
+    # So, f_plus_1_stream[0] = -f_minus_1_stream[0] - f_0_stream[0]
     f_plus_1_stream[0] = -f_minus_1_reacted[1] - f_0_reacted[0]
-    # Ensure non-negativity for stability, though this might affect accuracy near the boundary
+    # Ensure non-negativity, as distribution functions should be >= 0
     f_plus_1_stream[0] = max(0, f_plus_1_stream[0])
 
-
     # Apply Boundary Condition at a_max (right boundary, index N-1): df/da = 0 (Neumann)
-    # This means the flux is zero at the boundary: J = f_plus_1 - f_minus_1 = 0 => f_plus_1 = f_minus_1
-    # We need to set the outgoing population f_minus_1_stream[N-1].
-    # The incoming population f_plus_1_reacted[N-1] streams from the left (index N-2).
-    # The particle f_0_reacted[N-1] stays at the boundary.
-    # A simple Neumann BC implementation in LBM is to set the unknown outgoing population equal to the known incoming one.
-    # f_minus_1_stream[N-1] = f_plus_1_reacted[N-1]
-    # Or, using non-equilibrium extrapolation:
-    # f_minus_1_stream[N-1] = f_minus_1_col_reacted[N-2] + (f_minus_1_eq[N-2] - f_minus_1_col_reacted[N-2]) # Simple extrapolation
-    # A common and often stable Neumann BC: set the outgoing population based on the density and known populations to satisfy zero flux.
-    # J[N-1] = f_plus_1_stream[N-1] - f_minus_1_stream[N-1] = 0 => f_minus_1_stream[N-1] = f_plus_1_stream[N-1]
-    # f_plus_1_stream[N-1] comes from f_plus_1_reacted[N-2] after streaming.
-    # Let's use a simple copy of the distribution function from the interior node (zero gradient on f-1).
-    f_minus_1_stream[N-1] = f_minus_1_reacted[N-2] # This is a simple extrapolation for f-1
+    # Use non-equilibrium extrapolation method for outgoing population f_minus_1_stream[N-1]
+    # f_minus_1_stream[N-1] = f_minus_1_eq[N-1] + (f_minus_1_reacted[N-1] - f_minus_1_eq[N-1]) # Simple extrapolation, not Neumann
+    # For df/da = 0, f[N-1] = f[N-2]. This means rho_t[N-1] = rho_t[N-2].
+    # A common Neumann BC implementation is to set the unknown outgoing population based on the known incoming one to satisfy zero flux (f_plus_1 = f_minus_1).
+    # The incoming population f_plus_1_reacted[N-1] streams from index N-2.
+    # We want f_minus_1_stream[N-1] = f_plus_1_stream[N-1].
+    # f_plus_1_stream[N-1] is the value streamed from f_plus_1_reacted[N-2].
+    f_minus_1_stream[N-1] = f_plus_1_reacted[N-2] # Set outgoing equal to incoming for f-1 and f+1
+    # Ensure non-negativity
+    f_minus_1_stream[N-1] = max(0, f_minus_1_stream[N-1])
 
 
     return f_minus_1_stream, f_0_stream, f_plus_1_stream
@@ -97,8 +86,8 @@ def LBM_CASE4(f_minus_1, f_0, f_plus_1, advection_velocity, reaction_term, omega
 def run_lb_case4(f0, a, advection_velocity, reaction_term, t_max, dt, N, a_max):
 
     # Parameters
-    omega = 1.5 # Relaxation parameter (adjust for stability and accuracy)
-    # Try adjusting omega if unstable. Closer to 1 is more diffusive, closer to 2 is less diffusive but can be unstable.
+    omega = 1.0 # Start with omega = 1.0 (BGK) for simplicity
+    # Adjust omega if needed for stability and accuracy (between 0 and 2).
 
     da = a_max / N
     timesteps = int(t_max / dt)
@@ -110,9 +99,18 @@ def run_lb_case4(f0, a, advection_velocity, reaction_term, t_max, dt, N, a_max):
     ci = np.array([-c, 0, c])
 
     # Calculate initial equilibrium distributions based on f0 and advection_velocity
-    f_minus_1 = w[0] * f0 * (1 + advection_velocity * ci[0] / cs_sq)
-    f_0 = w[1] * f0 * (1 + advection_velocity * ci[1] / cs_sq)
-    f_plus_1 = w[2] * f0 * (1 + advection_velocity * ci[2] / cs_sq)
+    # Ensure f0 has the correct shape (N,)
+    if f0.shape != a.shape:
+        raise ValueError("Shape of initial condition f0 and spatial grid a must match.")
+
+    # Calculate initial density
+    rho_initial = f0 # Since f is the density
+
+    # Calculate initial equilibrium distributions based on initial density and advection velocity
+    f_minus_1 = w[0] * rho_initial * (1 + advection_velocity * ci[0] / cs_sq)
+    f_0 = w[1] * rho_initial * (1 + advection_velocity * ci[1] / cs_sq)
+    f_plus_1 = w[2] * rho_initial * (1 + advection_velocity * ci[2] / cs_sq)
+
 
     # Ensure initial distributions are non-negative (important for stability)
     f_minus_1[f_minus_1 < 0] = 0
@@ -126,7 +124,7 @@ def run_lb_case4(f0, a, advection_velocity, reaction_term, t_max, dt, N, a_max):
 
     for n in range(1, timesteps):
         # Collision and streaming
-        f_minus_1, f_0, f_plus_1 = LBM_CASE4(f_minus_1, f_0, f_plus_1, advection_velocity, reaction_term, omega, dt)
+        f_minus_1, f_0, f_plus_1 = LBM_CASE4(f_minus_1, f_0, f_plus_1, advection_velocity, reaction_term, omega, dt, da)
 
         # Calculate macroscopic density f
         f_t = f_minus_1 + f_0 + f_plus_1
